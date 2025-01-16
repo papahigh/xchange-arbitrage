@@ -132,6 +132,13 @@ class CycleFinderTest {
             enterPath = emptyList(),
             cyclePath = listOf(edges[0], edges[2], edges[9], edges[4]) // 0 -> 1 -> 4 -> 2 -> 0
         )
+
+        assert(
+            CycleFinder(graph, 3),
+            hasCycle = true,
+            enterPath = listOf(edges[7]), // 3 -> 4
+            cyclePath = listOf(edges[9], edges[4], edges[0], edges[2]) // 0 -> 1 -> 4 -> 2 -> 0
+        )
     }
 
     @Test
