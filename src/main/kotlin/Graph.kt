@@ -2,87 +2,82 @@ package com.github.papahigh
 
 import java.util.*
 import kotlin.collections.ArrayDeque
-import kotlin.math.ln
+import kotlin.math.abs
 
 
-data class Edge(val from: Int, val to: Int, val price: Double) {
-    val weight = -ln(price)
-
-    override fun toString(): String = "Edge($from -> $to, price=$price, weight=$weight)"
+interface Edge {
+    val from: Int
+    val to: Int
 }
 
-class Graph(private val vertices: Int) {
+class Graph<E : Edge>(private val vertexCount: Int) {
 
-    private val graph = Array<MutableList<Edge>>(vertices, init = { mutableListOf() })
+    private val graph = Array<MutableList<E>>(vertexCount, init = { mutableListOf() })
+    private var edgeCount = 0
 
-    fun addEdge(edge: Edge) = graph[edge.from].add(edge)
-
-    fun adjacent(vertex: Int): List<Edge> = graph[vertex]
-
-    fun vertices(): Int = vertices
-
-}
-
-class DijkstraPrice(private val graph: Graph, source: Int) {
-
-    private val distTo = Array(graph.vertices()) { Double.POSITIVE_INFINITY }
-    private val edgeTo = Array<Edge?>(graph.vertices()) { null }
-    private val marked = Array(graph.vertices()) { false }
-    private val queue = PriorityQueue<Element>()
-
-    init {
-        distTo[source] = 0.0
-        queue.add(Element(source, distTo[source]))
-
-        while (!queue.isEmpty()) {
-            var curr = queue.poll()
-            marked[curr.vertex] = true
-            relax(curr.vertex)
-        }
+    fun addEdge(edge: E) {
+        graph[edge.from].add(edge)
+        edgeCount++
     }
 
-    private fun relax(v: Int) {
-        for (edge in graph.adjacent(v)) {
-            val w = edge.to
-            if (marked[w]) continue
-            if (distTo[w] > distTo[v] + edge.price) {
-                distTo[w] = distTo[v] + edge.price
-                edgeTo[w] = edge
-                queue.offer(Element(w, distTo[w]))
+    fun adjacent(vertex: Int): List<E> = graph[vertex]
+    fun vertexCount(): Int = vertexCount
+    fun edgeCount(): Int = edgeCount
+}
+
+
+class SymbolGraph<V, E : Edge> private constructor(
+    private val symbolTable: Map<V, Int>,
+    private val symbolIndex: List<V>
+) {
+
+    val graph = Graph<E>(symbolTable.size)
+
+    fun addEdge(edge: E) = graph.addEdge(edge)
+
+    fun symbolOf(i: Int): V? {
+        if (i < 0 || i >= symbolTable.size) return null
+        return symbolIndex[i]
+    }
+
+    fun indexOf(symbol: V): Int? = symbolTable[symbol]
+    fun contains(symbol: V): Boolean = symbolTable.containsKey(symbol)
+
+    companion object {
+
+        fun <V, E : Edge> of(symbols: Collection<V>): SymbolGraph<V, E> {
+            val table = mutableMapOf<V, Int>()
+            val index: MutableList<V> = ArrayList()
+
+            for (i in symbols) {
+                if (!table.containsKey(i)) {
+                    index.add(i)
+                    table[i] = table.size
+                }
             }
+
+            return SymbolGraph<V, E>(table, index)
         }
-    }
-
-    data class Element(val vertex: Int, val price: Double) : Comparable<Element> {
-        override fun compareTo(other: Element): Int = this.price.compareTo(other.price)
-    }
-
-    fun distTo(vertex: Int): Double = distTo[vertex]
-
-    fun hasPathTo(vertex: Int): Boolean = marked[vertex]
-
-    fun shortestPathTo(vertex: Int): Iterable<Edge> {
-        val path = LinkedList<Edge>()
-        var edge = edgeTo[vertex]
-        while (edge != null) {
-            path.push(edge)
-            edge = edgeTo[edge.from]
-        }
-        return path
     }
 }
 
-class BellmanFordWeight(private val graph: Graph, private val source: Int) {
+interface WeightedEdge : Edge {
+    val weight: Double
+}
 
-    private val distTo = Array(graph.vertices()) { Double.POSITIVE_INFINITY }
-    private val edgeTo = Array<Edge?>(graph.vertices()) { null }
+class BellmanFord<E : WeightedEdge> private constructor(
+    private val graph: Graph<E>,
+    private val source: Int
+) {
 
+    private val distTo = Array(graph.vertexCount()) { Double.POSITIVE_INFINITY }
+
+    private var edgeTo = arrayOfNulls<Edge>(graph.vertexCount())
     private val queue = ArrayDeque<Int>()
-    private val onQueue = Array(graph.vertices()) { false }
 
+    private val onQueue = Array(graph.vertexCount()) { false }
     private var cyclePath: Iterable<Edge>? = null
-    private var enterPath: Iterable<Edge>? = null
-    private var counter = 0
+    private var iteration = 0
 
     init {
         distTo[source] = 0.0
@@ -96,9 +91,17 @@ class BellmanFordWeight(private val graph: Graph, private val source: Int) {
         }
     }
 
-    fun negativeCyclePath(): Iterable<Edge>? = cyclePath
+    companion object {
+        fun <E : WeightedEdge> of(graph: Graph<E>, source: Int): BellmanFord<E> {
+            return BellmanFord<E>(graph, source)
+        }
 
-    fun negativeEnterPath(): Iterable<Edge>? = enterPath
+        fun <V, E : WeightedEdge> of(symbolGraph: SymbolGraph<V, E>, sourceSymbol: V): BellmanFord<E> {
+            return BellmanFord<E>(symbolGraph.graph, symbolGraph.indexOf(sourceSymbol)!!)
+        }
+    }
+
+    fun negativeCyclePath(): Iterable<Edge>? = cyclePath
 
     fun hasNegativeCycle(): Boolean = cyclePath != null
 
@@ -118,7 +121,7 @@ class BellmanFordWeight(private val graph: Graph, private val source: Int) {
     private fun relax(v: Int) {
         for (edge in graph.adjacent(v)) {
             val w = edge.to
-            if (distTo[w] > distTo[v] + edge.weight) {
+            if (distTo[w].greaterThan(distTo[v] + edge.weight)) {
                 distTo[w] = distTo[v] + edge.weight
                 edgeTo[w] = edge
                 if (!onQueue[w]) {
@@ -126,67 +129,62 @@ class BellmanFordWeight(private val graph: Graph, private val source: Int) {
                     onQueue[w] = true
                 }
             }
-            if (counter++ % graph.vertices() == 0 && counter > 1) {
+            if (iteration++ % graph.vertexCount() == 0) {
                 findNegativeCycle()
             }
         }
     }
 
     private fun findNegativeCycle() {
-        var curr = Graph(graph.vertices())
-        for (v in 0 until graph.vertices()) {
+        var curr = Graph<Edge>(graph.vertexCount())
+        for (v in 0 until graph.vertexCount()) {
             edgeTo[v]?.let { curr.addEdge(it) }
         }
-        CycleFinder(curr, graph, source).let {
+        CycleFinder(curr).let {
             cyclePath = it.cyclePath()
-            enterPath = it.enterPath()
         }
     }
 }
 
+const val EPS = 1e-6
 
-class CycleFinder(
-    private val targetGraph: Graph,
-    private val originalGraph: Graph,
-    private val source: Int
-) {
+fun Double.greaterThan(other: Double): Boolean {
+    var that = this.toDouble()
+    if (abs(that - other) < EPS) return false
+    return that > other
+}
 
-    constructor(graph: Graph, source: Int) : this(graph, graph, source)
 
-    private val edgeTo = Array<Edge?>(targetGraph.vertices()) { null }
-    private val onStack = Array(targetGraph.vertices()) { false }
-    private val marked = Array(targetGraph.vertices()) { false }
+class CycleFinder<E : Edge>(private val graph: Graph<E>) {
 
-    private var enterPath: Iterable<Edge>? = null
-    private var cyclePath: Iterable<Edge>? = null
+    private val marked = Array(graph.vertexCount()) { 0 }
+    private val edgeTo = Array<Edge?>(graph.vertexCount()) { null }
+    private var cyclePath: Collection<Edge>? = null
 
     init {
-        for (v in 0 until targetGraph.vertices())
-            if (!marked[v])
+        for (v in 0 until graph.vertexCount())
+            if (marked[v] == 0)
                 dfs(v)
     }
 
-    fun enterPath(): Iterable<Edge>? = enterPath
-
-    fun cyclePath(): Iterable<Edge>? = cyclePath
+    fun cyclePath(): Collection<Edge>? = cyclePath
 
     fun hasCycle(): Boolean = cyclePath != null
 
     private fun dfs(vertex: Int) {
-        onStack[vertex] = true
-        marked[vertex] = true
+        marked[vertex] += 2
 
-        for (edge in targetGraph.adjacent(vertex)) {
+        for (edge in graph.adjacent(vertex)) {
             if (hasCycle()) return
-            if (!marked[edge.to]) {
+            if (marked[edge.to] == 0) {
                 edgeTo[edge.to] = edge
                 dfs(edge.to)
-            } else if (onStack[edge.to]) {
+            } else if (marked[edge.to] > 1) {
                 addCycle(vertex, edge)
             }
         }
 
-        onStack[vertex] = false
+        marked[vertex] -= 1
     }
 
     private fun addCycle(v: Int, edge: Edge) {
@@ -197,29 +195,6 @@ class CycleFinder(
             i = edgeTo[i]!!.from
         } while (i != edge.to)
         cycle.push(edge)
-
-        val shortestPathTree = DijkstraPrice(originalGraph, source)
-        var minDistance = Double.POSITIVE_INFINITY
-        var cycleStart = -1
-
-        for (e in cycle) {
-            if (shortestPathTree.distTo(e.from) < minDistance) {
-                minDistance = shortestPathTree.distTo(e.from)
-                cycleStart = e.from
-            }
-        }
-
-        enterPath = if (cycleStart >= 0) {
-            var enter = shortestPathTree.shortestPathTo(cycleStart)
-            while (cycle.first().from != cycleStart) {
-                cycle.addLast(cycle.removeFirst())
-            }
-            enter
-        } else emptyList()
-
         cyclePath = cycle
-
-        println("enter: $enterPath")
-        println("cycle: $cyclePath")
     }
 }

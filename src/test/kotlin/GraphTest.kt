@@ -1,204 +1,229 @@
-import com.github.papahigh.BellmanFordWeight
-import com.github.papahigh.CycleFinder
-import com.github.papahigh.Edge
-import com.github.papahigh.Graph
+import com.github.papahigh.*
+import kotlin.math.ln
 import kotlin.test.Test
 import kotlin.test.expect
 
 
-class BellmanFordTest {
+class SymbolGraphTest {
+
+    private val sg = SymbolGraph.of<String, E>(listOf("A", "B", "C", "D", "E", "F"))
 
     @Test
-    fun testEnterPathToNegativeCycle() {
-        val edges = arrayOf(
-            Edge(0, 1, .9),
-            Edge(0, 2, .9),
-            Edge(1, 3, .8),
-            Edge(1, 4, .6),
-            Edge(2, 3, .67),
-            Edge(2, 5, .49),
-            Edge(3, 4, .8),
-            Edge(3, 5, .74), // 3 -> 5
-            Edge(4, 3, .8), // 4 -> 3
-            Edge(4, 6, .67),
-            Edge(5, 4, .9),
-            Edge(5, 6, 2.2), // 5 -> 6
-            Edge(6, 4, .9), // 6 -> 4
-        )
-        val graph = graph(7, *edges)
+    fun testSymbolGraph() {
+        addEdge(E("A", "B"))
+        addEdge(E("A", "C"))
+        addEdge(E("B", "D"))
+        addEdge(E("C", "E"))
+        addEdge(E("C", "F"))
+        addEdge(E("F", "E"))
 
-        assert(
-            BellmanFordWeight(graph, 0),
-            enterPath = listOf(edges[1], edges[5]), // 0 -> 2 -> 5
-            cyclePath = listOf(edges[11], edges[12], edges[8], edges[7]) // 5 -> 6 -> 4 -> 3 -> 5
-        )
+        expect(6) { sg.graph.edgeCount() }
+        expect(6) { sg.graph.vertexCount() }
 
-        assert(
-            BellmanFordWeight(graph, 1),
-            enterPath = listOf(edges[3]), // 1 -> 4
-            cyclePath = listOf(edges[8], edges[7], edges[11], edges[12]) // 4 -> 3 -> 5 -> 6 -> 4
-        )
-
-        assert(
-            BellmanFordWeight(graph, 6),
-            enterPath = emptyList(),
-            cyclePath = listOf(edges[12], edges[8], edges[7], edges[11]) // 6 -> 4 -> 3 -> 5 -> 6
-        )
+        assertNeighbours("A", listOf("B", "C"))
+        assertNeighbours("B", listOf("D"))
+        assertNeighbours("C", listOf("E", "F"))
+        assertNeighbours("D", listOf())
+        assertNeighbours("E", listOf())
+        assertNeighbours("F", listOf("E"))
     }
 
-    @Test
-    fun testNoShortestPath() {
-        val edges = arrayOf(
-            Edge(0, 1, .9), Edge(0, 2, .9),
-            Edge(1, 3, .9), Edge(1, 4, .6),
-            Edge(2, 3, .7), Edge(2, 5, .49),
-            Edge(3, 4, .4), Edge(3, 5, .7),
-            Edge(4, 5, .9), Edge(4, 6, .67),
-            Edge(5, 4, .9), Edge(5, 6, .9),
-        )
-        val graph = graph(7, *edges)
-        var target = BellmanFordWeight(graph, 3)
+    private fun assertNeighbours(vertex: String, neighbours: List<String>) {
+        var adjacent = sg.graph.adjacent(sg.indexOf(vertex)!!)
+            .map { it.to }
+            .map { sg.symbolOf(it) }
 
-        expect(emptyList()) { target.shortestPathTo(0) } // unreachable
-        expect(emptyList()) { target.shortestPathTo(3) } // already there
-        expect(listOf(edges[7], edges[11])) { target.shortestPathTo(6) } // 3 -> 5 -> 6
-
-        assert(target, enterPath = null, cyclePath = null)
+        expect(neighbours) { adjacent }
     }
 
-    private fun assert(target: BellmanFordWeight, enterPath: List<Edge>?, cyclePath: List<Edge>?) {
-        expect(enterPath) { target.negativeEnterPath() }
-        expect(cyclePath) { target.negativeCyclePath() }
-        expect(cyclePath != null) { target.hasNegativeCycle() }
+    private fun addEdge(edge: E) {
+        sg.addEdge(edge)
+    }
+
+    private inner class E(override val from: Int, override val to: Int) : Edge {
+        constructor(from: String, to: String) : this(sg.indexOf(from)!!, sg.indexOf(to)!!)
     }
 }
+
+class BellmanFordTest {
+
+    private val sg = SymbolGraph.of<String, E>(listOf("USD", "EUR", "GBP", "CHF", "CAD"))
+
+    @Test
+    fun testArbitrageFound() {
+
+        addEdges(
+            E("USD", "EUR", 0.741),
+            E("USD", "GBP", 0.657),
+            E("USD", "CHF", 1.061),
+            E("USD", "CAD", 1.005),
+            E("EUR", "USD", 1.349),
+            E("EUR", "GBP", 0.888),
+            E("EUR", "CHF", 1.433),
+            E("EUR", "CAD", 1.366),
+            E("GBP", "USD", 1.521),
+            E("GBP", "EUR", 1.126),
+            E("GBP", "CHF", 1.614),
+            E("GBP", "CAD", 1.538),
+            E("CHF", "USD", 0.942),
+            E("CHF", "EUR", 0.698),
+            E("CHF", "GBP", 0.619),
+            E("CHF", "CAD", 0.953),
+            E("CAD", "USD", 0.995),
+            E("CAD", "EUR", 0.732),
+            E("CAD", "GBP", 0.650),
+            E("CAD", "CHF", 0.049),
+        )
+
+        var target = BellmanFord.of(sg, "USD")
+
+        assertThat(
+            target,
+            hasCycle = true,
+            cyclePath = listOf(E("GBP", "USD", 1.521), E("USD", "EUR", 0.741), E("EUR", "GBP", 0.888))
+        )
+    }
+
+    private fun assertThat(target: BellmanFord<E>, hasCycle: Boolean, cyclePath: List<E>? = null) {
+        expect(hasCycle) { target.hasNegativeCycle() }
+        expect(cyclePath) { target.negativeCyclePath() }
+    }
+
+    private fun addEdges(vararg edges: E) {
+        for (edge in edges)
+            sg.addEdge(edge)
+    }
+
+    inner class E(override val from: Int, override val to: Int, override val weight: Double) : WeightedEdge {
+        constructor(from: String, to: String, price: Double) : this(
+            sg.indexOf(from)!!,
+            sg.indexOf(to)!!,
+            -ln(price)
+        )
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is E) return false
+
+            if (from != other.from) return false
+            if (to != other.to) return false
+            if (weight != other.weight) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = from
+            result = 31 * result + to
+            result = 31 * result + weight.hashCode()
+            return result
+        }
+
+        override fun toString(): String {
+            return "E(from=$from, to=$to, weight=$weight)"
+        }
+    }
+}
+
 
 class CycleFinderTest {
 
     @Test
     fun testCycleFound1() {
-        val edges = arrayOf(
-            Edge(0, 1, .1),
-            Edge(0, 2, .1),
-            Edge(1, 2, .1), // 1 -> 2
-            Edge(1, 4, .1),
-            Edge(2, 5, .1), // 2 -> 5
-            Edge(3, 1, .1), // 3 -> 1
-            Edge(3, 4, .1),
-            Edge(4, 6, .1),
-            Edge(5, 3, .1), // 5 -> 3
-            Edge(5, 4, .1),
-            Edge(5, 6, .1),
-        )
-        val graph = graph(7, *edges)
-
-        assert(
-            CycleFinder(graph, 0),
-            hasCycle = true,
-            enterPath = listOf(edges[0]), // 0 -> 1
-            cyclePath = listOf(edges[2], edges[4], edges[8], edges[5]) // 1 -> 2 -> 5 -> 3 -> 1
+        val graph = createGraph(
+            7,
+            E(0, 1),
+            E(0, 2),
+            E(1, 2), // 1 -> 2
+            E(1, 4),
+            E(2, 5), // 2 -> 5
+            E(3, 1), // 3 -> 1
+            E(3, 4),
+            E(4, 6),
+            E(5, 3), // 5 -> 3
+            E(5, 4),
+            E(5, 6),
         )
 
-        assert(
-            CycleFinder(graph, 3),
-            hasCycle = true,
-            enterPath = emptyList(),
-            cyclePath = listOf(edges[5], edges[2], edges[4], edges[8]) // 3 -> 1 -> 2 -> 5 -> 3
-        )
+        assertThat(CycleFinder(graph), hasCycle = true, cyclePath = listOf(E(3, 1), E(1, 2), E(2, 5), E(5, 3)))
     }
 
     @Test
     fun testCycleFound2() {
-        val edges = arrayOf(
-            Edge(0, 1, .1), // 0 -> 1
-            Edge(0, 2, .1),
-            Edge(1, 4, .1), // 1 -> 4
-            Edge(1, 3, .1),
-            Edge(2, 0, .1), // 2 -> 0
-            Edge(2, 3, .1),
-            Edge(2, 5, .1),
-            Edge(3, 4, .1),
-            Edge(3, 5, .1),
-            Edge(4, 2, .1), // 4 -> 2
-            Edge(4, 6, .1),
-            Edge(5, 4, .1),
-            Edge(5, 6, .1),
-        )
-        val graph = graph(7, *edges)
-
-        assert(
-            CycleFinder(graph, 0),
-            hasCycle = true,
-            enterPath = emptyList(),
-            cyclePath = listOf(edges[0], edges[2], edges[9], edges[4]) // 0 -> 1 -> 4 -> 2 -> 0
+        val graph = createGraph(
+            7,
+            E(0, 1), // 0 -> 1
+            E(0, 2),
+            E(1, 4), // 1 -> 4
+            E(1, 3),
+            E(2, 0), // 2 -> 0
+            E(2, 3),
+            E(2, 5),
+            E(3, 4),
+            E(3, 5),
+            E(4, 2), // 4 -> 2
+            E(4, 6),
+            E(5, 4),
+            E(5, 6),
         )
 
-        assert(
-            CycleFinder(graph, 3),
-            hasCycle = true,
-            enterPath = listOf(edges[7]), // 3 -> 4
-            cyclePath = listOf(edges[9], edges[4], edges[0], edges[2]) // 0 -> 1 -> 4 -> 2 -> 0
-        )
+        assertThat(CycleFinder(graph), hasCycle = true, cyclePath = listOf(E(2, 0), E(0, 1), E(1, 4), E(4, 2)))
     }
 
     @Test
     fun testCycleFound3() {
         val edges = arrayOf(
-            Edge(0, 1, .1),
-            Edge(0, 2, .1),
-            Edge(1, 4, .1),
-            Edge(1, 3, .1),
-            Edge(2, 3, .1),
-            Edge(2, 5, .1), // enter
-            Edge(3, 4, .1),
-            Edge(3, 5, .1),
-            Edge(4, 6, .1), // 4 -> 6
-            Edge(5, 4, .1), // 5 -> 4
-            Edge(6, 5, .1), // 6 -> 5
+            E(0, 1),
+            E(0, 2),
+            E(1, 4),
+            E(1, 3),
+            E(2, 3),
+            E(2, 5),
+            E(3, 4),
+            E(3, 5),
+            E(4, 6), // 4 -> 6
+            E(5, 4), // 5 -> 4
+            E(6, 5), // 6 -> 5
         )
-        val graph = graph(7, *edges)
+        val graph = createGraph(7, *edges)
 
-        assert(
-            CycleFinder(graph, 2),
-            hasCycle = true,
-            enterPath = listOf(edges[5]), // 2 -> 5
-            cyclePath = listOf(edges[9], edges[8], edges[10]) // 5 -> 4 -> 6 -> 5
-        )
+        assertThat(CycleFinder(graph), hasCycle = true, cyclePath = listOf(E(5, 4), E(4, 6), E(6, 5)))
     }
 
     @Test
     fun testNoCycle() {
-        val graph = graph(
+        val graph = createGraph(
             7,
-            Edge(0, 1, .1),
-            Edge(0, 2, .1),
-            Edge(1, 4, .1),
-            Edge(1, 3, .1),
-            Edge(2, 3, .1),
-            Edge(2, 5, .1),
-            Edge(3, 4, .1),
-            Edge(3, 5, .1),
-            Edge(4, 6, .1),
-            Edge(5, 4, .1),
-            Edge(5, 6, .1),
+            E(0, 1),
+            E(0, 2),
+            E(1, 4),
+            E(1, 3),
+            E(2, 3),
+            E(2, 5),
+            E(3, 4),
+            E(3, 5),
+            E(4, 6),
+            E(5, 4),
+            E(5, 6),
         )
-        assert(CycleFinder(graph, 0), hasCycle = false, enterPath = null, cyclePath = null)
+        assertThat(CycleFinder(graph), hasCycle = false)
     }
 
     @Test
     fun testEmptyGraph() {
-        assert(CycleFinder(graph(7), 0), hasCycle = false, enterPath = null, cyclePath = null)
+        assertThat(CycleFinder(createGraph(7)), hasCycle = false)
     }
 
-    private fun assert(target: CycleFinder, hasCycle: Boolean, enterPath: List<Edge>?, cyclePath: List<Edge>?) {
+    private fun assertThat(target: CycleFinder<E>, hasCycle: Boolean, cyclePath: List<Edge>? = null) {
         expect(hasCycle) { target.hasCycle() }
-        expect(enterPath) { target.enterPath() }
         expect(cyclePath) { target.cyclePath() }
     }
-}
 
-fun graph(vertices: Int, vararg edges: Edge): Graph {
-    var graph = Graph(vertices)
-    edges.forEach { graph.addEdge(it) }
-    return graph
+    private data class E(override val from: Int, override val to: Int) : Edge
+
+    private fun createGraph(v: Int, vararg edges: E): Graph<E> {
+        var graph = Graph<E>(v)
+        edges.forEach { graph.addEdge(it) }
+        return graph
+    }
 }
