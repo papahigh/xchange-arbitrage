@@ -10,6 +10,7 @@ repositories {
 }
 
 dependencies {
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
     implementation("org.knowm.xchange:xchange-core:5.2.1")
     implementation("org.knowm.xchange:xchange-bitfinex:5.2.1")
     implementation("org.knowm.xchange:xchange-stream-bitfinex:5.2.1")
