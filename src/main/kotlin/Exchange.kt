@@ -1,15 +1,12 @@
 package com.github.papahigh
 
-
 import info.bitrich.xchangestream.bitfinex.BitfinexStreamingExchange
-import info.bitrich.xchangestream.core.StreamingExchangeFactory
-import io.reactivex.rxjava3.core.Observable
+import io.reactivex.rxjava3.disposables.Disposable
 import org.knowm.xchange.ExchangeFactory
 import org.knowm.xchange.ExchangeSpecification
 import org.knowm.xchange.bitfinex.BitfinexExchange
 import org.knowm.xchange.currency.CurrencyPair
 import org.knowm.xchange.dto.marketdata.Ticker
-import org.knowm.xchange.instrument.Instrument
 import org.knowm.xchange.service.marketdata.params.CurrencyPairsParam
 
 
@@ -18,36 +15,44 @@ class Exchange private constructor(
     private val streamingSpec: ExchangeSpecification
 ) {
 
-    private val exchangeClient: ExchangeClient by lazy { ExchangeFactory.INSTANCE.createExchange(exchangeSpec) }
-    private val streamingClient: StreamingClient by lazy {
-        val client = StreamingExchangeFactory.INSTANCE.createExchange(streamingSpec)
+    val exchangeClient: ExchangeClient by lazy { ExchangeFactory.INSTANCE.createExchange(exchangeSpec) }
+
+    val streamingClient: StreamingClient by lazy {
+        val client = StreamingFactory.INSTANCE.createExchange(streamingSpec)
         client.connect().blockingAwait()
         return@lazy client
     }
 
-    val instruments: List<Instrument> by lazy { exchangeClient.exchangeInstruments }
-    val currencyPairs: List<CurrencyPair> by lazy { instruments.filterIsInstance<CurrencyPair>() }
-
-    fun getTicker(pair: CurrencyPair): Observable<Ticker> {
-        return streamingClient.streamingMarketDataService.getTicker(pair)
+    fun getTickers(currencyPairs: Collection<CurrencyPair>): Collection<Ticker> {
+        return exchangeClient.marketDataService.getTickers(GetTickersRequest(currencyPairs))
     }
 
-    fun getTickers(): Collection<Ticker> {
-        return exchangeClient.marketDataService.getTickers(CurrencyPairTickersRequest())
+    fun subscribe(pair: CurrencyPair, onNext: (ticker: Ticker) -> Unit): Disposable {
+        return streamingClient.streamingMarketDataService.getTicker(pair).subscribe(onNext)
     }
 
-    private inner class CurrencyPairTickersRequest() : CurrencyPairsParam {
-        override fun getCurrencyPairs() = this@Exchange.currencyPairs
+    private class GetTickersRequest(val target: Collection<CurrencyPair>) : CurrencyPairsParam {
+        override fun getCurrencyPairs() = target
     }
 
     companion object {
-        fun bitfinex(): Exchange {
-            var exchangeSpec = BitfinexExchange().defaultExchangeSpecification
-            var streamingSpec = BitfinexStreamingExchange().defaultExchangeSpecification
-            return Exchange(exchangeSpec, streamingSpec)
-        }
+
+        /**
+         * Creates an instance of the Exchange class configured for the Bitfinex exchange platform.
+         *
+         * @param exchangeSpec The exchange specification for the Bitfinex REST API client. Defaults to the
+         *                     default exchange specification for the Bitfinex exchange.
+         * @param streamingSpec The exchange specification for the Bitfinex streaming API client. Defaults to
+         *                      the default exchange specification for the Bitfinex streaming exchange.
+         * @return A new instance of the Exchange class configured for Bitfinex.
+         */
+        fun bitfinex(
+            exchangeSpec: ExchangeSpecification = BitfinexExchange().defaultExchangeSpecification,
+            streamingSpec: ExchangeSpecification = BitfinexStreamingExchange().defaultExchangeSpecification
+        ) = Exchange(exchangeSpec, streamingSpec)
     }
 }
 
 typealias ExchangeClient = org.knowm.xchange.Exchange
 typealias StreamingClient = info.bitrich.xchangestream.core.StreamingExchange
+typealias StreamingFactory = info.bitrich.xchangestream.core.StreamingExchangeFactory
