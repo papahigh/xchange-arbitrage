@@ -10,12 +10,14 @@ class SymbolGraphTest {
 
     @Test
     fun testSymbolGraph() {
-        addEdge(E("A", "B"))
-        addEdge(E("A", "C"))
-        addEdge(E("B", "D"))
-        addEdge(E("C", "E"))
-        addEdge(E("C", "F"))
-        addEdge(E("F", "E"))
+        addEdges(
+            edge("A", "B"),
+            edge("A", "C"),
+            edge("B", "D"),
+            edge("C", "E"),
+            edge("C", "F"),
+            edge("F", "E"),
+        )
 
         expect(6) { sg.graph.edgeCount() }
         expect(6) { sg.graph.vertexCount() }
@@ -36,13 +38,16 @@ class SymbolGraphTest {
         expect(neighbours) { adjacent }
     }
 
-    private fun addEdge(edge: E) {
-        sg.addEdge(edge)
+    private fun addEdges(vararg edges: E) {
+        for (edge in edges)
+            sg.addEdge(edge)
     }
 
-    private inner class E(override val from: Int, override val to: Int) : Edge {
-        constructor(from: String, to: String) : this(sg.indexOf(from)!!, sg.indexOf(to)!!)
+    private fun edge(from: String, to: String): E {
+        return E(sg.indexOf(from)!!, sg.indexOf(to)!!)
     }
+
+    private data class E(override val from: Int, override val to: Int) : Edge
 }
 
 class BellmanFordTest {
@@ -53,34 +58,34 @@ class BellmanFordTest {
     fun testArbitrageFound() {
 
         addEdges(
-            E("USD", "EUR", 0.741),
-            E("USD", "GBP", 0.657),
-            E("USD", "CHF", 1.061),
-            E("USD", "CAD", 1.005),
-            E("EUR", "USD", 1.349),
-            E("EUR", "GBP", 0.888),
-            E("EUR", "CHF", 1.433),
-            E("EUR", "CAD", 1.366),
-            E("GBP", "USD", 1.521),
-            E("GBP", "EUR", 1.126),
-            E("GBP", "CHF", 1.614),
-            E("GBP", "CAD", 1.538),
-            E("CHF", "USD", 0.942),
-            E("CHF", "EUR", 0.698),
-            E("CHF", "GBP", 0.619),
-            E("CHF", "CAD", 0.953),
-            E("CAD", "USD", 0.995),
-            E("CAD", "EUR", 0.732),
-            E("CAD", "GBP", 0.650),
-            E("CAD", "CHF", 0.049),
+            edge("USD", "EUR", 0.741),
+            edge("USD", "GBP", 0.657),
+            edge("USD", "CHF", 1.061),
+            edge("USD", "CAD", 1.005),
+            edge("EUR", "USD", 1.349),
+            edge("EUR", "GBP", 0.888),
+            edge("EUR", "CHF", 1.433),
+            edge("EUR", "CAD", 1.366),
+            edge("GBP", "USD", 1.521),
+            edge("GBP", "EUR", 1.126),
+            edge("GBP", "CHF", 1.614),
+            edge("GBP", "CAD", 1.538),
+            edge("CHF", "USD", 0.942),
+            edge("CHF", "EUR", 0.698),
+            edge("CHF", "GBP", 0.619),
+            edge("CHF", "CAD", 0.953),
+            edge("CAD", "USD", 0.995),
+            edge("CAD", "EUR", 0.732),
+            edge("CAD", "GBP", 0.650),
+            edge("CAD", "CHF", 0.049),
         )
 
-        var target = BellmanFord.of(sg, "USD")
+        var target = BellmanFord.of("USD", sg)
 
         assertThat(
             target,
             hasCycle = true,
-            cyclePath = listOf(E("GBP", "USD", 1.521), E("USD", "EUR", 0.741), E("EUR", "GBP", 0.888))
+            cyclePath = listOf(edge("GBP", "USD", 1.521), edge("USD", "EUR", 0.741), edge("EUR", "GBP", 0.888))
         )
     }
 
@@ -94,35 +99,11 @@ class BellmanFordTest {
             sg.addEdge(edge)
     }
 
-    inner class E(override val from: Int, override val to: Int, override val weight: Double) : WeightedEdge {
-        constructor(from: String, to: String, price: Double) : this(
-            sg.indexOf(from)!!,
-            sg.indexOf(to)!!,
-            -ln(price)
-        )
-
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (other !is E) return false
-
-            if (from != other.from) return false
-            if (to != other.to) return false
-            if (weight != other.weight) return false
-
-            return true
-        }
-
-        override fun hashCode(): Int {
-            var result = from
-            result = 31 * result + to
-            result = 31 * result + weight.hashCode()
-            return result
-        }
-
-        override fun toString(): String {
-            return "E(from=$from, to=$to, weight=$weight)"
-        }
+    private fun edge(from: String, to: String, price: Double): E {
+        return E(sg.indexOf(from)!!, sg.indexOf(to)!!, -ln(price))
     }
+
+    data class E(override val from: Int, override val to: Int, override val weight: Double) : WeightedEdge
 }
 
 
@@ -172,7 +153,8 @@ class CycleFinderTest {
 
     @Test
     fun testCycleFound3() {
-        val edges = arrayOf(
+        val graph = createGraph(
+            7,
             E(0, 1),
             E(0, 2),
             E(1, 4),
@@ -185,7 +167,6 @@ class CycleFinderTest {
             E(5, 4), // 5 -> 4
             E(6, 5), // 6 -> 5
         )
-        val graph = createGraph(7, *edges)
 
         assertThat(CycleFinder(graph), hasCycle = true, cyclePath = listOf(E(5, 4), E(4, 6), E(6, 5)))
     }
@@ -214,7 +195,7 @@ class CycleFinderTest {
         assertThat(CycleFinder(createGraph(7)), hasCycle = false)
     }
 
-    private fun assertThat(target: CycleFinder<E>, hasCycle: Boolean, cyclePath: List<Edge>? = null) {
+    private fun assertThat(target: CycleFinder<E>, hasCycle: Boolean, cyclePath: List<E>? = null) {
         expect(hasCycle) { target.hasCycle() }
         expect(cyclePath) { target.cyclePath() }
     }
