@@ -68,8 +68,8 @@ class Market private constructor(
         if (ticker.instrument in index) {
             log.debug("Received update for {}", ticker.instrument)
             index[ticker.instrument]?.let {
-                it.ask.updatePrice(ticker.ask)
-                it.bid.updatePrice(ticker.bid.invert())
+                it.ask.updatePrice(ticker.ask.invert())
+                it.bid.updatePrice(ticker.bid)
             }
             listener?.onMarketUpdate(graph)
         } else {
@@ -101,18 +101,18 @@ class Market private constructor(
 
                 val rate = ExchangeRates(
                     ask = ExchangeRate(
-                        from = base,
-                        to = counter,
-                        fromCurrency = pair.base,
-                        toCurrency = pair.counter,
-                        price = ticker.ask
-                    ),
-                    bid = ExchangeRate(
                         from = counter,
                         to = base,
                         fromCurrency = pair.counter,
                         toCurrency = pair.base,
-                        price = ticker.bid.invert()
+                        price = ticker.ask.invert(),
+                    ),
+                    bid = ExchangeRate(
+                        from = base,
+                        to = counter,
+                        fromCurrency = pair.base,
+                        toCurrency = pair.counter,
+                        price = ticker.bid,
                     ),
                 )
 

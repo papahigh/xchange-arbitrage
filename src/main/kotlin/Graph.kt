@@ -30,7 +30,7 @@ class Graph<E : Edge>(private val vertexCount: Int) {
 
 class SymbolGraph<V, E : Edge> private constructor(
     private val symbolTable: Map<V, Int>,
-    private val symbolIndex: List<V>
+    private val symbolIndex: List<V>,
 ) {
 
     val graph = Graph<E>(symbolTable.size)
@@ -97,9 +97,9 @@ class BellmanFord<E : WeightedEdge> private constructor(
             return BellmanFord<E>(symbolGraph.indexOf(sourceSymbol)!!, symbolGraph.graph)
         }
 
-        const val EPS = 1e-6
+        private const val EPS = 1e-6
 
-        fun Double.greaterThan(other: Double): Boolean {
+        private fun Double.greaterThan(other: Double): Boolean {
             var that = this.toDouble()
             if (abs(that - other) < EPS) return false
             return that > other

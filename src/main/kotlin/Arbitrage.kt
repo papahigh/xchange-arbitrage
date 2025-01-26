@@ -6,6 +6,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.knowm.xchange.currency.Currency
 import org.slf4j.LoggerFactory.getLogger
+import java.math.BigDecimal
+import java.text.NumberFormat
 import kotlin.system.measureNanoTime
 
 
@@ -54,14 +56,21 @@ class Arbitrage(
         private val log = getLogger(Arbitrage::class.java)!!
 
         private fun Collection<ExchangeRate>.render(): String {
+            var total = BigDecimal.ONE
+            val fmt = NumberFormat.getNumberInstance().also { it.maximumFractionDigits = 10 }
             val sb = StringBuilder()
             var it = this.iterator()
+            if (it.hasNext()) {
+                val curr = it.next()
+                total *= curr.price
+                sb.append("${curr.fromCurrency} -> ${curr.toCurrency} (${fmt.format(curr.price)})")
+            }
             while (it.hasNext()) {
                 val curr = it.next()
-                sb.append("${curr.fromCurrency} -> ${curr.price} ${curr.toCurrency}")
-                if (it.hasNext())
-                    sb.append(", ")
+                total *= curr.price
+                sb.append(" -> ${curr.toCurrency} (${fmt.format(curr.price)})")
             }
+            sb.append(" | Total product: ${fmt.format(total)}")
             return sb.toString()
         }
     }
