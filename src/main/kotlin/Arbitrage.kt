@@ -1,13 +1,10 @@
 package com.github.papahigh
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import org.knowm.xchange.currency.Currency
 import org.slf4j.LoggerFactory.getLogger
 import java.math.BigDecimal
 import java.text.NumberFormat
+import java.util.concurrent.Executors
 import kotlin.system.measureNanoTime
 
 
@@ -20,13 +17,13 @@ class Arbitrage(
     private val listener: ArbitrageListener = ArbitrageLogger(),
 ) : MarketListener {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val executor = Executors.newFixedThreadPool(sources.size)
 
     override fun onMarketUpdate(graph: SymbolGraph<Currency, ExchangeRate>) {
         log.trace("Received market update")
 
         sources.forEach { source ->
-            scope.launch {
+            executor.execute {
                 log.debug("Checking arbitrage opportunity for {}", source)
 
                 val nanos = measureNanoTime {
