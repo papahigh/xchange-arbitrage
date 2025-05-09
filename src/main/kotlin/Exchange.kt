@@ -8,7 +8,9 @@ import org.knowm.xchange.bitfinex.BitfinexExchange
 import org.knowm.xchange.currency.CurrencyPair
 import org.knowm.xchange.dto.marketdata.Ticker
 import org.knowm.xchange.service.marketdata.params.CurrencyPairsParam
-
+import info.bitrich.xchangestream.core.StreamingExchange as StreamingClient
+import info.bitrich.xchangestream.core.StreamingExchangeFactory as StreamingFactory
+import org.knowm.xchange.Exchange as ExchangeClient
 
 class Exchange private constructor(
     private val exchangeSpec: ExchangeSpecification,
@@ -53,6 +55,3 @@ class Exchange private constructor(
     }
 }
 
-typealias ExchangeClient = org.knowm.xchange.Exchange
-typealias StreamingClient = info.bitrich.xchangestream.core.StreamingExchange
-typealias StreamingFactory = info.bitrich.xchangestream.core.StreamingExchangeFactory
